@@ -32,6 +32,8 @@ typedef enum {
 #define DEFAULT_SPECIAL_LAYER 0
 // The reset point is actuation_point - act_buf, and act_buf is at most 8.
 #define MIN_ACTUATION 8
+// An explicit release point below this can keep a key pressed because of sensor noise at rest.
+#define MIN_RESET_POINT 7
 #define MAX_RT_MODE 2
 #define NUM_INPUT_PRIORITY_PAIRS 8
 #define INPUT_PRIORITY_PAIR_DISABLED 255
@@ -69,6 +71,9 @@ typedef enum {
     LAYER_SPECIAL,
     ACTUATION_PROFILE_COUNT
 } actuation_layer_t;
+
+// A pair with this profile value applies in every actuation profile.
+#define INPUT_PRIORITY_PROFILE_ALL ACTUATION_PROFILE_COUNT
 typedef enum {
     INPUT_PRIORITY_RESOLUTION_LAST = 0,
     INPUT_PRIORITY_RESOLUTION_PRIMARY,
@@ -78,7 +83,7 @@ typedef enum {
 } input_priority_resolution_t;
 
 typedef struct {
-    uint8_t layer;
+    uint8_t profile;
     uint8_t primary_row;
     uint8_t primary_col;
     uint8_t secondary_row;
@@ -92,7 +97,7 @@ typedef struct {
 
 extern input_priority_state_t input_priority_states[NUM_INPUT_PRIORITY_PAIRS];
 
-extern uint8_t input_priority_indices[DYNAMIC_KEYMAP_LAYER_COUNT][MATRIX_ROWS][MATRIX_COLS];
+extern uint8_t input_priority_indices[ACTUATION_PROFILE_COUNT][MATRIX_ROWS][MATRIX_COLS];
 
 typedef struct {
     actuation_t actuation_matrix[ACTUATION_PROFILE_COUNT][MATRIX_ROWS][MATRIX_COLS];

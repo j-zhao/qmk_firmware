@@ -28,7 +28,7 @@ void he_sync_input_priority_pair(uint8_t index) {
     uint8_t cfg[] = {
         INPUT_PRIORITY_SYNC,
         index,
-        pair_cfg->layer,
+        pair_cfg->profile,
         pair_cfg->primary_row,
         pair_cfg->primary_col,
         pair_cfg->secondary_row,
@@ -95,7 +95,7 @@ void he_sync_slave(uint8_t in_buflen, const void *in_data, uint8_t out_buflen, v
         uint8_t index = data[1];
 
         input_priority_t pair_cfg = {
-            .layer = data[2],
+            .profile = data[2],
             .primary_row = data[3],
             .primary_col = data[4],
             .secondary_row = data[5],

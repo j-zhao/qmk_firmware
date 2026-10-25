@@ -30,11 +30,26 @@ matrix_row_t press_states[ROWS_PER_HAND];
 key_state_t key_matrix[ROWS_PER_HAND][MATRIX_COLS];
 
 input_priority_state_t input_priority_states[NUM_INPUT_PRIORITY_PAIRS];
-uint8_t input_priority_indices[DYNAMIC_KEYMAP_LAYER_COUNT][MATRIX_ROWS][MATRIX_COLS];
+uint8_t input_priority_indices[ACTUATION_PROFILE_COUNT][MATRIX_ROWS][MATRIX_COLS];
 
 #if defined(DEBUG_MATRIX_SCAN_RATE)
 static uint32_t matrix_timer = 0;
 #endif
+
+// The slave applies sync updates from the serial thread, which can interrupt a scan.
+// Use a local copy and check that both keys are on this half before indexing.
+static bool load_local_pair(uint8_t pair_index, input_priority_t *pair_cfg, uint8_t row_pairs[2], uint8_t col_pairs[2]) {
+    if (pair_index == 0 || pair_index > NUM_INPUT_PRIORITY_PAIRS) {
+        return false;
+    }
+    *pair_cfg    = he_config.input_priority_pairs[pair_index - 1];
+    row_pairs[0] = pair_cfg->primary_row - thisHand;
+    row_pairs[1] = pair_cfg->secondary_row - thisHand;
+    col_pairs[0] = pair_cfg->primary_col;
+    col_pairs[1] = pair_cfg->secondary_col;
+    return row_pairs[0] < ROWS_PER_HAND && row_pairs[1] < ROWS_PER_HAND && col_pairs[0] < MATRIX_COLS && col_pairs[1] < MATRIX_COLS;
+}
+
 
 #ifdef SPLIT_KEYBOARD
 bool matrix_post_scan(void) {
@@ -279,20 +294,11 @@ uint8_t matrix_scan(void) {
             
 
             if (!prev_pressed && key_state->is_pressed) {
-                uint8_t pair_index = input_priority_indices[current_layer][row + thisHand][col];
-                if (pair_index) {
-                    const input_priority_t *pair_cfg = &he_config.input_priority_pairs[pair_index - 1];
+                uint8_t pair_index = input_priority_indices[profile][row + thisHand][col];
+                input_priority_t pair_cfg;
+                uint8_t row_pairs[2], col_pairs[2];
+                if (load_local_pair(pair_index, &pair_cfg, row_pairs, col_pairs)) {
                     input_priority_state_t *pair_state = &input_priority_states[pair_index - 1];
-
-                    uint8_t row_pairs[] = {
-                        pair_cfg->primary_row - thisHand,
-                        pair_cfg->secondary_row - thisHand,
-                    };
-
-                    uint8_t col_pairs[] = {
-                        pair_cfg->primary_col,
-                        pair_cfg->secondary_col,
-                    };
 
                     const uint8_t index = (row == row_pairs[0] && col == col_pairs[0]) ? 0 : 1;
                     
@@ -302,19 +308,19 @@ uint8_t matrix_scan(void) {
                     };
                     
                     if (is_pressed[0] & is_pressed[1]) {
-                        if (pair_cfg->resolution == INPUT_PRIORITY_RESOLUTION_DEPTH) {
+                        if (pair_cfg.resolution == INPUT_PRIORITY_RESOLUTION_DEPTH) {
                             is_pressed[index] = key_matrix[row_pairs[index]][col_pairs[index]].pos_curr >=
                                                 key_matrix[row_pairs[index ^ 1]][col_pairs[index ^ 1]].pos_curr + act_buf;
                             is_pressed[index ^ 1] = !is_pressed[index];
                         } else {
                             is_pressed[index] =
-                                (pair_cfg->resolution != INPUT_PRIORITY_RESOLUTION_NEUTRAL) &
-                                ((pair_cfg->resolution == INPUT_PRIORITY_RESOLUTION_LAST) |
-                                ((pair_cfg->resolution == INPUT_PRIORITY_RESOLUTION_PRIMARY) & (index == 0)) |
-                                ((pair_cfg->resolution == INPUT_PRIORITY_RESOLUTION_SECONDARY) & (index == 1)));
+                                (pair_cfg.resolution != INPUT_PRIORITY_RESOLUTION_NEUTRAL) &
+                                ((pair_cfg.resolution == INPUT_PRIORITY_RESOLUTION_LAST) |
+                                ((pair_cfg.resolution == INPUT_PRIORITY_RESOLUTION_PRIMARY) & (index == 0)) |
+                                ((pair_cfg.resolution == INPUT_PRIORITY_RESOLUTION_SECONDARY) & (index == 1)));
 
                             is_pressed[index ^ 1] =
-                                (pair_cfg->resolution != INPUT_PRIORITY_RESOLUTION_NEUTRAL) & !is_pressed[index];
+                                (pair_cfg.resolution != INPUT_PRIORITY_RESOLUTION_NEUTRAL) & !is_pressed[index];
                         }
                     }
 
@@ -334,20 +340,11 @@ uint8_t matrix_scan(void) {
                 press_states[row] |= (1 << col);
 
             } else if (prev_pressed && !key_state->is_pressed) {
-                uint8_t pair_index = input_priority_indices[current_layer][row + thisHand][col];
-                if (pair_index) {
-                    const input_priority_t *pair_cfg = &he_config.input_priority_pairs[pair_index - 1];
+                uint8_t pair_index = input_priority_indices[profile][row + thisHand][col];
+                input_priority_t pair_cfg;
+                uint8_t row_pairs[2], col_pairs[2];
+                if (load_local_pair(pair_index, &pair_cfg, row_pairs, col_pairs)) {
                     input_priority_state_t *pair_state = &input_priority_states[pair_index - 1];
-
-                    uint8_t row_pairs[] = {
-                        pair_cfg->primary_row - thisHand,
-                        pair_cfg->secondary_row - thisHand,
-                    };
-
-                    uint8_t col_pairs[] = {
-                        pair_cfg->primary_col,
-                        pair_cfg->secondary_col,
-                    };
 
                     bool is_pressed[] = {
                         key_matrix[row_pairs[0]][col_pairs[0]].is_pressed,
@@ -370,20 +367,11 @@ uint8_t matrix_scan(void) {
                 press_states[row] &= ~(1 << col);
 
             } else if (key_state->is_pressed) {
-                uint8_t pair_index = input_priority_indices[current_layer][row + thisHand][col];
-                if (pair_index) {
-                    const input_priority_t *pair_cfg = &he_config.input_priority_pairs[pair_index - 1];
+                uint8_t pair_index = input_priority_indices[profile][row + thisHand][col];
+                input_priority_t pair_cfg;
+                uint8_t row_pairs[2], col_pairs[2];
+                if (load_local_pair(pair_index, &pair_cfg, row_pairs, col_pairs)) {
                     input_priority_state_t *pair_state = &input_priority_states[pair_index - 1];
-
-                    uint8_t row_pairs[] = {
-                        pair_cfg->primary_row - thisHand,
-                        pair_cfg->secondary_row - thisHand,
-                    };
-
-                    uint8_t col_pairs[] = {
-                        pair_cfg->primary_col,
-                        pair_cfg->secondary_col,
-                    };
 
                     const uint8_t index = (row == row_pairs[0] && col == col_pairs[0]) ? 0 : 1;
                     
@@ -392,7 +380,7 @@ uint8_t matrix_scan(void) {
                         key_matrix[row_pairs[1]][col_pairs[1]].is_pressed,
                     };
                     
-                    if (pair_cfg->resolution == INPUT_PRIORITY_RESOLUTION_DEPTH && (is_pressed[0] & is_pressed[1])) {
+                    if (pair_cfg.resolution == INPUT_PRIORITY_RESOLUTION_DEPTH && (is_pressed[0] & is_pressed[1])) {
                         if ((key_matrix[row_pairs[index]][col_pairs[index]].pos_curr >= 255 - act_buf) &&
                             (key_matrix[row_pairs[index ^ 1]][col_pairs[index ^ 1]].pos_curr >= 255 - act_buf)) {
                             
@@ -422,6 +410,8 @@ uint8_t matrix_scan(void) {
                             curr_matrix[row_pairs[i]] &= ~(1 << col_pairs[i]);
                         }
                     }
+                } else {
+                    curr_matrix[row] |= (1 << col);
                 }
             }
         }

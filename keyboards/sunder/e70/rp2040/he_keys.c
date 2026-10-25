@@ -20,7 +20,7 @@ const he_config_t he_config_default = {
     },
     .input_priority_pairs = { 
         [0 ... NUM_INPUT_PRIORITY_PAIRS - 1] = {
-            .layer = INPUT_PRIORITY_PAIR_DISABLED,
+            .profile = INPUT_PRIORITY_PAIR_DISABLED,
             .primary_row = INPUT_PRIORITY_PAIR_DISABLED,
             .primary_col = INPUT_PRIORITY_PAIR_DISABLED,
             .secondary_row = INPUT_PRIORITY_PAIR_DISABLED,
@@ -34,4 +34,4 @@ const he_config_t he_config_default = {
 
 he_config_t he_config;
 
-uint8_t input_priority_indices[DYNAMIC_KEYMAP_LAYER_COUNT][MATRIX_ROWS][MATRIX_COLS] = {0};
+uint8_t input_priority_indices[ACTUATION_PROFILE_COUNT][MATRIX_ROWS][MATRIX_COLS] = {0};

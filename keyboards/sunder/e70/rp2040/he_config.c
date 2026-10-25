@@ -14,22 +14,29 @@ static void save_field(const void *field, uint32_t size) {
     eeconfig_update_kb_datablock(field, offset, size);
 }
 
-static void index_pair(const input_priority_t *pair_cfg, uint8_t value) {
-    if (pair_cfg->layer >= DYNAMIC_KEYMAP_LAYER_COUNT) {
-        return;
-    }
-    if (pair_cfg->primary_row < MATRIX_ROWS && pair_cfg->primary_col < MATRIX_COLS) {
-        input_priority_indices[pair_cfg->layer][pair_cfg->primary_row][pair_cfg->primary_col] = value;
-    }
-    if (pair_cfg->secondary_row < MATRIX_ROWS && pair_cfg->secondary_col < MATRIX_COLS) {
-        input_priority_indices[pair_cfg->layer][pair_cfg->secondary_row][pair_cfg->secondary_col] = value;
-    }
+// Each half reads only its own sensors, so both keys of a pair must be on the same half.
+static bool is_active_pair(const input_priority_t *pair_cfg) {
+    return pair_cfg->profile <= INPUT_PRIORITY_PROFILE_ALL &&
+           pair_cfg->primary_row < MATRIX_ROWS && pair_cfg->primary_col < MATRIX_COLS &&
+           pair_cfg->secondary_row < MATRIX_ROWS && pair_cfg->secondary_col < MATRIX_COLS &&
+           pair_cfg->primary_row / ROWS_PER_HAND == pair_cfg->secondary_row / ROWS_PER_HAND &&
+           (pair_cfg->primary_row != pair_cfg->secondary_row || pair_cfg->primary_col != pair_cfg->secondary_col) &&
+           pair_cfg->resolution <= INPUT_PRIORITY_RESOLUTION_DEPTH;
 }
 
 static void rebuild_input_priority_indices(void) {
     memset(input_priority_indices, 0, sizeof(input_priority_indices));
     for (uint8_t index = 0; index < NUM_INPUT_PRIORITY_PAIRS; index++) {
-        index_pair(&he_config.input_priority_pairs[index], index + 1);
+        const input_priority_t *pair_cfg = &he_config.input_priority_pairs[index];
+        if (!is_active_pair(pair_cfg)) {
+            continue;
+        }
+        for (uint8_t profile = 0; profile < ACTUATION_PROFILE_COUNT; profile++) {
+            if (pair_cfg->profile == profile || pair_cfg->profile == INPUT_PRIORITY_PROFILE_ALL) {
+                input_priority_indices[profile][pair_cfg->primary_row][pair_cfg->primary_col]     = index + 1;
+                input_priority_indices[profile][pair_cfg->secondary_row][pair_cfg->secondary_col] = index + 1;
+            }
+        }
     }
 }
 
@@ -63,6 +70,10 @@ bool he_config_set_actuation(uint8_t profile, uint8_t row, uint8_t col, const ac
     if (actuation_cfg->actuation_point < MIN_ACTUATION || actuation_cfg->rt_mode > MAX_RT_MODE) {
         return false;
     }
+    // A release point at or deeper than the actuation point would release a pressed key.
+    if (actuation_cfg->reset_point != DEFAULT_RESET && (actuation_cfg->reset_point >= actuation_cfg->actuation_point || actuation_cfg->reset_point < MIN_RESET_POINT)) {
+        return false;
+    }
     actuation_t *field = &he_config.actuation_matrix[profile][row][col];
     *field             = *actuation_cfg;
     save_field(field, sizeof(*field));
@@ -76,10 +87,12 @@ bool he_config_set_input_priority_pair(uint8_t index, const input_priority_t *pa
     if (index >= NUM_INPUT_PRIORITY_PAIRS) {
         return false;
     }
+    if (pair_cfg->profile != INPUT_PRIORITY_PAIR_DISABLED && !is_active_pair(pair_cfg)) {
+        return false;
+    }
     input_priority_t *field = &he_config.input_priority_pairs[index];
-    index_pair(field, 0);
-    *field = *pair_cfg;
-    index_pair(field, index + 1);
+    *field                  = *pair_cfg;
+    rebuild_input_priority_indices();
     save_field(field, sizeof(*field));
     if (should_forward()) {
         he_sync_input_priority_pair(index);
