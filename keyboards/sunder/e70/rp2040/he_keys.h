@@ -30,6 +30,9 @@ typedef enum {
 #define DEFAULT_RT_RELEASE 0
 #define DEFAULT_SWITCH SWITCH_350
 #define DEFAULT_SPECIAL_LAYER 0
+// The reset point is actuation_point - act_buf, and act_buf is at most 8.
+#define MIN_ACTUATION 8
+#define MAX_RT_MODE 2
 #define NUM_INPUT_PRIORITY_PAIRS 8
 #define INPUT_PRIORITY_PAIR_DISABLED 255
 

@@ -60,6 +60,9 @@ bool he_config_set_actuation(uint8_t profile, uint8_t row, uint8_t col, const ac
     if (profile >= ACTUATION_PROFILE_COUNT || row >= MATRIX_ROWS || col >= MATRIX_COLS) {
         return false;
     }
+    if (actuation_cfg->actuation_point < MIN_ACTUATION || actuation_cfg->rt_mode > MAX_RT_MODE) {
+        return false;
+    }
     actuation_t *field = &he_config.actuation_matrix[profile][row][col];
     *field             = *actuation_cfg;
     save_field(field, sizeof(*field));
